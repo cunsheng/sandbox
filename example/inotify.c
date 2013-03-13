@@ -55,11 +55,10 @@ int main(int argc, char **argv) /* {{{ */ {
 
     printf("fd %d, wd %d\n", fd, wd);
 
+    printf("== read begin");
     queue_len_max = EVENT_SIZE;
     event_buf = calloc(1, queue_len_max);
-    printf("-- event buf init size: %d\n\n", queue_len_max);
-
-    printf("== read begin\n");
+    printf(", event buf init size: %d", queue_len_max);
     while (1) {
         queue_len = get_queue_len(fd);
         if (queue_len > queue_len_max) {
@@ -69,7 +68,7 @@ int main(int argc, char **argv) /* {{{ */ {
                 exit(1);
             }
             queue_len_max = queue_len;
-            printf("-- event buf realloc: %d\n", queue_len);
+            printf(", event buf realloc: %d", queue_len);
         }
 
         read_len = read(fd, event_buf, queue_len);
@@ -77,57 +76,43 @@ int main(int argc, char **argv) /* {{{ */ {
             perror("read event failure");
             exit(1);
         }
-        printf("-- read len: %d\n", read_len);
+        printf(", read len: %d\n", read_len);
 
         i = 0;
         while (i < read_len) {
             event = (struct inotify_event *) &event_buf[i];
 
-            printf("WD: %d, ", event->wd);
-            switch (event->mask) {
-                case IN_ACCESS:
-                    printf("IN_ACCESS");
-                    break;
-                case IN_ATTRIB:
-                    printf("IN_ATTRIB");
-                    break;
-                case IN_CLOSE_WRITE:
-                    printf("IN_CLOSE_WRITE");
-                    break;
-                case IN_CLOSE_NOWRITE:
-                    printf("IN_CLOSE_NOWRITE");
-                    break;
-                case IN_CREATE:
-                    printf("IN_CREATE");
-                    break;
-                case IN_DELETE:
-                    printf("IN_DELETE");
-                    break;
-                case IN_DELETE_SELF:
-                    printf("IN_DELETE_SELF");
-                    break;
-                case IN_MODIFY:
-                    printf("IN_MODIFY");
-                    break;
-                case IN_MOVE_SELF:
-                    printf("IN_MOVED_SELF");
-                    break;
-                case IN_MOVED_FROM:
-                    printf("IN_MOVED_FROM");
-                    break;
-                case IN_MOVED_TO:
-                    printf("IN_MOVED_TO");
-                    break;
-                case IN_OPEN:
-                    printf("IN_OPEN");
-                    break;
-                default:
-                    printf("[ UNKNOW ACT ]");
-                    break;
+            printf("WD: %d", event->wd);
+            if (event->mask & IN_ACCESS) {
+                printf(", IN_ACCESS        ");
+            } else if (event->mask & IN_ATTRIB) {
+                printf(", IN_ATTRIB        ");
+            } else if (event->mask & IN_CLOSE_WRITE) {
+                printf(", IN_CLOSE_WRITE   ");
+            } else if (event->mask & IN_CLOSE_NOWRITE) {
+                printf(", IN_CLOSE_NOWRITE ");
+            } else if (event->mask & IN_CREATE) {
+                printf(", IN_CREATE        ");
+            } else if (event->mask & IN_DELETE) {
+                printf(", IN_DELETE        ");
+            } else if (event->mask & IN_DELETE_SELF) {
+                printf(", IN_DELETE_SELF   ");
+            } else if (event->mask & IN_MODIFY) {
+                printf(", IN_MODIFY        ");
+            } else if (event->mask & IN_MOVE_SELF) {
+                printf(", IN_MOVED_SELF    ");
+            } else if (event->mask & IN_MOVED_FROM) {
+                printf(", IN_MOVED_FROM    ");
+            } else if (event->mask & IN_MOVED_TO) {
+                printf(", IN_MOVED_TO      ");
+            } else if (event->mask & IN_OPEN) {
+                printf(", IN_OPEN          ");
             }
 
             if (event->len) {
-                printf(", name: %s", event->name);
+                printf(" <name: %s>", event->name);
+            } else if (event->mask & IN_ISDIR) {
+                printf(" <SELF>");
             }
 
             if (event->mask & IN_IGNORED) {
@@ -143,11 +128,13 @@ int main(int argc, char **argv) /* {{{ */ {
                 printf(", IN_UNMOUNT");
             }
 
+            printf(", cookie: %d", event->cookie);
+
             i += EVENT_SIZE + event->len;
             printf("\n");
         }
 
-        printf("== read again\n");
+        printf("\n== read again");
     }
 
     inotify_rm_watch(fd, wd);
