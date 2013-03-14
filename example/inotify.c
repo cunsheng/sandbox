@@ -28,7 +28,7 @@ int get_queue_len(int fd) /* {{{ */ {
 
 int main(int argc, char **argv) /* {{{ */ {
     char *path;
-    int read_len, i;
+    int read_len, i, no;
     int fd, wd;
     int queue_len, queue_len_max;
     char *event_buf;
@@ -59,6 +59,7 @@ int main(int argc, char **argv) /* {{{ */ {
     queue_len_max = EVENT_SIZE;
     event_buf = calloc(1, queue_len_max);
     printf(", event buf init size: %d", queue_len_max);
+    no = 1;
     while (1) {
         queue_len = get_queue_len(fd);
         if (queue_len > queue_len_max) {
@@ -82,7 +83,7 @@ int main(int argc, char **argv) /* {{{ */ {
         while (i < read_len) {
             event = (struct inotify_event *) &event_buf[i];
 
-            printf("WD: %d", event->wd);
+            printf("NO %d, WD %d", no++, event->wd);
             if (event->mask & IN_ACCESS) {
                 printf(", IN_ACCESS        ");
             } else if (event->mask & IN_ATTRIB) {
@@ -134,6 +135,7 @@ int main(int argc, char **argv) /* {{{ */ {
             printf("\n");
         }
 
+        fflush(stdout);
         printf("\n== read again");
     }
 
