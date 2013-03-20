@@ -1,0 +1,1 @@
+(?P<date> (?P<year>(\d\d)?\d\d) - (?P<month>\d\d) - (?P<day>\d\d) )
