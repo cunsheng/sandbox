@@ -12,7 +12,8 @@
 #include <sys/ioctl.h>
 #include <sys/inotify.h>
 
-#define EVENT_SIZE     ( sizeof (struct inotify_event) )
+#define EVENT_SIZE ( sizeof (struct inotify_event) )
+#define PRINT_EVENT(event, mask) if (event & mask) printf(", %s", #mask)
 
 int get_queue_len(int fd) /* {{{ */ {
     int ret;
@@ -36,7 +37,7 @@ int main(int argc, char **argv) /* {{{ */ {
     struct inotify_event *event;
 
     if (argc < 2) {
-        printf("Usage: %s <File or DIR>\n", argv[0]);
+        printf("Usage: %s <file or dir path>\n", argv[0]);
         exit(1);
     }
     path = argv[1];
@@ -84,31 +85,19 @@ int main(int argc, char **argv) /* {{{ */ {
             event = (struct inotify_event *) &event_buf[i];
 
             printf("NO %d, WD %d", no++, event->wd);
-            if (event->mask & IN_ACCESS) {
-                printf(", IN_ACCESS        ");
-            } else if (event->mask & IN_ATTRIB) {
-                printf(", IN_ATTRIB        ");
-            } else if (event->mask & IN_CLOSE_WRITE) {
-                printf(", IN_CLOSE_WRITE   ");
-            } else if (event->mask & IN_CLOSE_NOWRITE) {
-                printf(", IN_CLOSE_NOWRITE ");
-            } else if (event->mask & IN_CREATE) {
-                printf(", IN_CREATE        ");
-            } else if (event->mask & IN_DELETE) {
-                printf(", IN_DELETE        ");
-            } else if (event->mask & IN_DELETE_SELF) {
-                printf(", IN_DELETE_SELF   ");
-            } else if (event->mask & IN_MODIFY) {
-                printf(", IN_MODIFY        ");
-            } else if (event->mask & IN_MOVE_SELF) {
-                printf(", IN_MOVED_SELF    ");
-            } else if (event->mask & IN_MOVED_FROM) {
-                printf(", IN_MOVED_FROM    ");
-            } else if (event->mask & IN_MOVED_TO) {
-                printf(", IN_MOVED_TO      ");
-            } else if (event->mask & IN_OPEN) {
-                printf(", IN_OPEN          ");
-            }
+
+            PRINT_EVENT(event->mask, IN_ACCESS);
+            PRINT_EVENT(event->mask, IN_ATTRIB);
+            PRINT_EVENT(event->mask, IN_CLOSE_WRITE);
+            PRINT_EVENT(event->mask, IN_CLOSE_NOWRITE);
+            PRINT_EVENT(event->mask, IN_CREATE);
+            PRINT_EVENT(event->mask, IN_DELETE);
+            PRINT_EVENT(event->mask, IN_DELETE_SELF);
+            PRINT_EVENT(event->mask, IN_MODIFY);
+            PRINT_EVENT(event->mask, IN_MOVE_SELF);
+            PRINT_EVENT(event->mask, IN_MOVED_FROM);
+            PRINT_EVENT(event->mask, IN_MOVED_TO);
+            PRINT_EVENT(event->mask, IN_OPEN);
 
             if (event->len) {
                 printf(" <name: %s>", event->name);
@@ -116,18 +105,10 @@ int main(int argc, char **argv) /* {{{ */ {
                 printf(" <SELF>");
             }
 
-            if (event->mask & IN_IGNORED) {
-                printf(", IN_IGNORED");
-            }
-            if (event->mask & IN_ISDIR) {
-                printf(", IN_ISDIR");
-            }
-            if (event->mask & IN_Q_OVERFLOW) {
-                printf(", IN_Q_OVERFLOW");
-            }
-            if (event->mask & IN_UNMOUNT) {
-                printf(", IN_UNMOUNT");
-            }
+            PRINT_EVENT(event->mask, IN_IGNORED);
+            PRINT_EVENT(event->mask, IN_ISDIR);
+            PRINT_EVENT(event->mask, IN_Q_OVERFLOW);
+            PRINT_EVENT(event->mask, IN_UNMOUNT);
 
             printf(", cookie: %d", event->cookie);
 
