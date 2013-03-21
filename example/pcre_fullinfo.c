@@ -2,6 +2,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pcre.h>
+#include <string.h>
+#include <sys/time.h>
 
 #define PATT_BUF_SIZE 128
 
@@ -16,6 +18,8 @@
     printf("%s: %s\n", #what, ptr);
 
 #define PRINT_OPT(opt, OPT) if (opt & OPT) printf("%s\n", #OPT);
+#define PRINT_CONFIG(ITEM, val) pcre_config(ITEM, &val); printf("%s: %d\n", #ITEM, val)
+#define PRINT_EXEC_ERROR(val, ERROR) if (val == ERROR) printf("%s\n", #ERROR)
 
 #define TO_STRING(x) _TO_STRING(x)
 #define _TO_STRING(x) #x
@@ -97,14 +101,43 @@ void print_pcre_fullinfo(const pcre *re, pcre_extra *extra) {
     }
 }
 
+void print_pcre_config() {
+    int val;
+
+    PRINT_CONFIG(PCRE_CONFIG_UTF8, val);
+    PRINT_CONFIG(PCRE_CONFIG_UNICODE_PROPERTIES, val);
+    PRINT_CONFIG(PCRE_CONFIG_NEWLINE, val);
+    PRINT_CONFIG(PCRE_CONFIG_LINK_SIZE, val);
+    PRINT_CONFIG(PCRE_CONFIG_POSIX_MALLOC_THRESHOLD, val);
+    PRINT_CONFIG(PCRE_CONFIG_MATCH_LIMIT, val);
+    PRINT_CONFIG(PCRE_CONFIG_MATCH_LIMIT_RECURSION, val);
+    PRINT_CONFIG(PCRE_CONFIG_STACKRECURSE, val);
+}
+
+double get_second() {
+    struct timeval t;
+    struct timezone tzp;
+    gettimeofday(&t, &tzp);
+    return t.tv_sec + t.tv_usec*1e-6;
+}
+
 int main(int argc, char **argv) {
     int fd, read_len;
     char patt[PATT_BUF_SIZE];
 
     const pcre *re;
+    int error;
     const char *errptr;
     int erroffset;
 
+    char input[129];
+    int rc, ovector[30], i;
+    char cap[128];
+    int cap_len;
+
+    double ts;
+
+    pcre_extra *extra;
 
     if (argc < 2) {
         printf("Usage: %s <pattern file path>\n", argv[0]);
@@ -131,8 +164,77 @@ int main(int argc, char **argv) {
     printf("Pattern: %s\n", patt);
     printf("------\n");
 
-    re = pcre_compile(patt, PCRE_ANCHORED|PCRE_DOTALL, &errptr, &erroffset, NULL);
+    printf("Version: %s\n", pcre_version());
+    printf("------\n");
+
+    print_pcre_config();
+    printf("------\n");
+
+    re = pcre_compile2(patt, PCRE_ANCHORED|PCRE_DOTALL, &error, &errptr, &erroffset, NULL);
+    if (!re) {
+        printf("pattern compile failure, error code: %d\n", error);
+        exit(1);
+    }
+
+    printf("Input text(Max 128): ");
+    scanf("%128s", input);
+    printf("------\n");
+
+    rc = pcre_exec(re, NULL, input, strlen(input), 0, 0, ovector, 30);
     print_pcre_fullinfo(re, NULL);
+    printf("------\n");
+    if (rc < 1) {
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NOMATCH);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NULL);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADOPTION);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADMAGIC);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_UNKNOWN_NODE);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NOMEMORY);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NOSUBSTRING);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_MATCHLIMIT);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_RECURSIONLIMIT);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_CALLOUT);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADUTF8);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADUTF8_OFFSET);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_PARTIAL);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADPARTIAL);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_INTERNAL);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADCOUNT);
+        PRINT_EXEC_ERROR(rc, PCRE_ERROR_PARTIAL);
+        exit(0);
+    }
+
+    for (i = 0; i < rc; i++) {
+        cap_len = ovector[i * 2 + 1] - ovector[i * 2];
+        memcpy(cap, &input[ovector[i * 2]], cap_len);
+        cap[cap_len] = '\0';
+        printf("%d, %s\n", i + 1, cap);
+    }
+    printf("------\n");
+
+    ts = get_second();
+    for (i = 0; i < 100000; i++) {
+        rc = pcre_exec(re, NULL, input, strlen(input), 0, 0, ovector, 30);
+    }
+    printf("%f\n", get_second() - ts);
+    printf("------\n");
+
+    extra = pcre_study(re, 0, &errptr);
+    if (extra == NULL ) {
+        printf("no improve after study\n");
+        exit(0);
+    }
+    if (errptr = NULL) {
+        printf("study failure, %s\n", errptr);
+        exit(1);
+    }
+
+    ts = get_second();
+    for (i = 0; i < 100000; i++) {
+        rc = pcre_exec(re, extra, input, strlen(input), 0, 0, ovector, 30);
+    }
+    printf("%f\n", get_second() - ts);
+    printf("------\n");
 
     return 0;
 }
