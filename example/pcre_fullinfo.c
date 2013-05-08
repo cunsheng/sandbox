@@ -6,6 +6,8 @@
 #include <sys/time.h>
 
 #define PATT_BUF_SIZE 128
+#define OVECTOR_SIZE 32
+#define SUBJECT_BUF_SIZE 128
 
 #define PCRE_INFO(re, extra, errno, what, ptr) errno = pcre_fullinfo(re, extra, what, &ptr);\
     if ((errno) < 0) {\
@@ -19,7 +21,7 @@
 
 #define PRINT_OPT(opt, OPT) if (opt & OPT) printf("%s\n", #OPT);
 #define PRINT_CONFIG(ITEM, val) pcre_config(ITEM, &val); printf("%s: %d\n", #ITEM, val)
-#define PRINT_EXEC_ERROR(val, ERROR) if (val == ERROR) printf("%s\n", #ERROR)
+#define PRINT_ERROR(val, ERROR) if (val == ERROR) printf("%s\n", #ERROR)
 
 #define TO_STRING(x) _TO_STRING(x)
 #define _TO_STRING(x) #x
@@ -116,8 +118,7 @@ void print_pcre_config() {
 
 double get_second() {
     struct timeval t;
-    struct timezone tzp;
-    gettimeofday(&t, &tzp);
+    gettimeofday(&t, NULL);
     return t.tv_sec + t.tv_usec*1e-6;
 }
 
@@ -130,9 +131,10 @@ int main(int argc, char **argv) {
     const char *errptr;
     int erroffset;
 
-    char input[129];
-    int rc, ovector[30], i;
-    char cap[128];
+    char subject[SUBJECT_BUF_SIZE];
+    int rc, ovector[OVECTOR_SIZE], i;
+    char cap[SUBJECT_BUF_SIZE];
+    char *cap_ptr, **cap_array;
     int cap_len;
 
     double ts;
@@ -176,65 +178,98 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    printf("Input text(Max 128): ");
-    scanf("%128s", input);
+    printf("Input text(Max 127): ");
+    scanf("%127s", subject);
     printf("------\n");
 
-    rc = pcre_exec(re, NULL, input, strlen(input), 0, 0, ovector, 30);
+    rc = pcre_exec(re, NULL, subject, strlen(subject), 0, 0, ovector, OVECTOR_SIZE);
     print_pcre_fullinfo(re, NULL);
     printf("------\n");
     if (rc < 1) {
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NOMATCH);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NULL);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADOPTION);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADMAGIC);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_UNKNOWN_NODE);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NOMEMORY);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_NOSUBSTRING);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_MATCHLIMIT);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_RECURSIONLIMIT);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_CALLOUT);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADUTF8);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADUTF8_OFFSET);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_PARTIAL);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADPARTIAL);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_INTERNAL);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_BADCOUNT);
-        PRINT_EXEC_ERROR(rc, PCRE_ERROR_PARTIAL);
+        PRINT_ERROR(rc, PCRE_ERROR_NOMATCH);
+        PRINT_ERROR(rc, PCRE_ERROR_NULL);
+        PRINT_ERROR(rc, PCRE_ERROR_BADOPTION);
+        PRINT_ERROR(rc, PCRE_ERROR_BADMAGIC);
+        PRINT_ERROR(rc, PCRE_ERROR_UNKNOWN_NODE);
+        PRINT_ERROR(rc, PCRE_ERROR_NOMEMORY);
+        PRINT_ERROR(rc, PCRE_ERROR_NOSUBSTRING);
+        PRINT_ERROR(rc, PCRE_ERROR_MATCHLIMIT);
+        PRINT_ERROR(rc, PCRE_ERROR_RECURSIONLIMIT);
+        PRINT_ERROR(rc, PCRE_ERROR_CALLOUT);
+        PRINT_ERROR(rc, PCRE_ERROR_BADUTF8);
+        PRINT_ERROR(rc, PCRE_ERROR_BADUTF8_OFFSET);
+        PRINT_ERROR(rc, PCRE_ERROR_PARTIAL);
+        PRINT_ERROR(rc, PCRE_ERROR_BADPARTIAL);
+        PRINT_ERROR(rc, PCRE_ERROR_INTERNAL);
+        PRINT_ERROR(rc, PCRE_ERROR_BADCOUNT);
+        PRINT_ERROR(rc, PCRE_ERROR_PARTIAL);
         exit(0);
     }
 
     for (i = 0; i < rc; i++) {
         cap_len = ovector[i * 2 + 1] - ovector[i * 2];
-        memcpy(cap, &input[ovector[i * 2]], cap_len);
+        memcpy(cap, &subject[ovector[i * 2]], cap_len);
         cap[cap_len] = '\0';
         printf("%d, %s\n", i + 1, cap);
     }
     printf("------\n");
 
+    // test performance
     ts = get_second();
     for (i = 0; i < 100000; i++) {
-        rc = pcre_exec(re, NULL, input, strlen(input), 0, 0, ovector, 30);
+        rc = pcre_exec(re, NULL, subject, strlen(subject), 0, 0, ovector, OVECTOR_SIZE);
     }
     printf("%f\n", get_second() - ts);
     printf("------\n");
 
+    // compare study with no study
     extra = pcre_study(re, 0, &errptr);
     if (extra == NULL ) {
         printf("no improve after study\n");
-        exit(0);
-    }
-    if (errptr = NULL) {
-        printf("study failure, %s\n", errptr);
-        exit(1);
-    }
+    } else {
+        if (errptr == NULL) {
+            printf("study failure, %s\n", errptr);
+            exit(1);
+        }
 
-    ts = get_second();
-    for (i = 0; i < 100000; i++) {
-        rc = pcre_exec(re, extra, input, strlen(input), 0, 0, ovector, 30);
+        ts = get_second();
+        for (i = 0; i < 100000; i++) {
+            rc = pcre_exec(re, extra, subject, strlen(subject), 0, 0, ovector, OVECTOR_SIZE);
+        }
+        printf("%f\n", get_second() - ts);
     }
-    printf("%f\n", get_second() - ts);
     printf("------\n");
+
+    // extract string with pcre func
+    printf("by pcre_copy_substring\n");
+    for (i = 0; i < rc; i++) {
+        cap_len = pcre_copy_substring(subject, ovector, rc, i, cap, SUBJECT_BUF_SIZE);
+        if (cap_len < 0) {
+            PRINT_ERROR(cap_len, PCRE_ERROR_NOMEMORY);
+            PRINT_ERROR(cap_len, PCRE_ERROR_NOSUBSTRING);
+            continue;
+        }
+        printf("%d, %s(%d)\n", i + 1, cap, cap_len);
+    }
+    printf("------\n");
+
+    printf("by pcre_get_substring\n");
+    for (i = 0; i < rc; i++) {
+        cap_len = pcre_get_substring(subject, ovector, rc, i, (const char **)&cap_ptr);
+        if (cap_len < 0) {
+            PRINT_ERROR(cap_len, PCRE_ERROR_NOMEMORY);
+            PRINT_ERROR(cap_len, PCRE_ERROR_NOSUBSTRING);
+        }
+        printf("%d, %s(%d)\n", i + 1, cap_ptr, cap_len);
+    }
+    printf("------\n");
+
+    printf("by pcre_get_substring_list\n");
+    pcre_get_substring_list(subject, ovector, rc, (const char ***)&cap_array);
+    for (i = 0; i < rc; i++) {
+        printf("%d, %s\n", i + 1, cap_array[i]);
+    }
+    
 
     return 0;
 }
